@@ -1,0 +1,47 @@
+name: Build iOS IPA
+on: [workflow_dispatch] # Allows you to trigger the build manually
+
+jobs:
+  build:
+    runs-on: macos-latest # Uses GitHub's cloud-hosted Mac
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Install Dependencies
+        run: |
+          brew install git-lfs swiftlint
+          git lfs install
+          git lfs pull
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Build and Archive
+        run: |
+          # Replaces the official bundle identifier so it can compile
+          sed -i '' 's/ch.protonmail.pass/com.yourname.protonpass/g' *.xcodeproj/project.pbxproj || true
+          
+          # Compiles the app into an unsigned archive
+          xcodebuild archive \
+            -workspace ios-pass.xcworkspace \
+            -scheme "Proton Pass" \
+            -configuration Release \
+            -archivePath $GITHUB_WORKSPACE/build/ProtonPass.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create Unsigned IPA
+        run: |
+          mkdir -p Payload
+          mv $GITHUB_WORKSPACE/build/ProtonPass.xcarchive/Products/Applications/*.app Payload/
+          zip -r ProtonPass.ipa Payload
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proton-pass-ipa
+          path: ProtonPass.ipa
